@@ -136,9 +136,16 @@ void free(void *ptr){
   LOG_FREE(ptr);
 
   item *cur=find(list, ptr);
-  if (cur&&cur->cnt){
-    n_freeb+=cur->size;
+  if (!cur){
+    LOG_ILL_FREE();
+  }
+  else{
+    if (cur->cnt){
+      n_freeb+=cur->size;
+      freep(ptr);
+    }
+    else
+      LOG_DOUBLE_FREE();
   }
   dealloc(list, ptr);
-  freep(ptr);
 }
