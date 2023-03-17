@@ -71,8 +71,18 @@ void fini(void)
 {
   // ...
 
-  LOG_STATISTICS(n_allocb, n_allocb/(n_malloc+n_calloc+n_realloc), 0L);
-
+  LOG_STATISTICS(n_allocb, n_allocb/(n_malloc+n_calloc+n_realloc), n_freeb);
+  if (n_allocb-n_freeb > 0){
+    LOG_NONFREED_START();
+    
+    item *cur = list->next;
+    while (cur){
+      if (cur->cnt){
+        LOG_BLOCK(cur->ptr, cur->size, cur->cnt);
+        cur=cur->next;
+      }
+    }
+  }
   LOG_STOP();
 
   // free list (not needed for part 1)
@@ -84,6 +94,8 @@ void fini(void)
 void *malloc(size_t size){
   
   void *tp=mallocp(size);
+  alloc(list, tp, size);
+
   LOG_MALLOC(size, tp);
   n_malloc++;
   n_allocb+=size;
@@ -94,6 +106,8 @@ void *malloc(size_t size){
 void *calloc(size_t nmemb, size_t size){
 
   void *tp=callocp(nmemb, size);
+  alloc(list, tp, nmemb*size);
+
   LOG_CALLOC(nmemb, size, tp);
   n_calloc++;
   n_allocb+=nmemb*size;
@@ -102,7 +116,15 @@ void *calloc(size_t nmemb, size_t size){
 }
 
 void *realloc(void *ptr, size_t size){
+  
+  item *cur=find(list, ptr);
+  if (cur&&cur->cnt>0)
+    n_freeb+=cur->size;
+  dealloc(list, ptr);
+
   void *tp=reallocp(ptr, size);
+  alloc(list, tp, size);
+
   LOG_REALLOC(ptr, size, tp);
   n_realloc++;
   n_allocb+=size;
@@ -112,5 +134,11 @@ void *realloc(void *ptr, size_t size){
 
 void free(void *ptr){
   LOG_FREE(ptr);
+
+  item *cur=find(list, ptr);
+  if (cur&&cur->cnt){
+    n_freeb+=cur->size;
+  }
+  dealloc(list, ptr);
   freep(ptr);
 }
