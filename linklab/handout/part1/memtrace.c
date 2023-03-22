@@ -82,7 +82,6 @@ void fini(void)
 // ...
 
 void *malloc(size_t size){
-  
   void *tp=mallocp(size);
   LOG_MALLOC(size, tp);
   n_malloc++;
@@ -92,7 +91,6 @@ void *malloc(size_t size){
 }
 
 void *calloc(size_t nmemb, size_t size){
-
   void *tp=callocp(nmemb, size);
   LOG_CALLOC(nmemb, size, tp);
   n_calloc++;
