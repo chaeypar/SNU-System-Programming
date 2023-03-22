@@ -77,7 +77,7 @@ void fini(void)
     
     item *cur = list->next;
     while (cur){
-      if (cur->cnt){
+      if (cur->cnt>0){
         LOG_BLOCK(cur->ptr, cur->size, cur->cnt);
       }
       cur=cur->next;
@@ -118,10 +118,10 @@ void *calloc(size_t nmemb, size_t size){
 void *realloc(void *ptr, size_t size){
   
   item *cur=find(list, ptr);
-  if (cur&&cur->cnt>0)
+  if (cur&&cur->cnt>0){
     n_freeb+=cur->size;
-  dealloc(list, ptr);
-
+    dealloc(list, ptr);
+  }
   void *tp=reallocp(ptr, size);
   alloc(list, tp, size);
 
@@ -140,12 +140,12 @@ void free(void *ptr){
     LOG_ILL_FREE();
   }
   else{
-    if (cur->cnt){
+    if (cur->cnt>0){
       n_freeb+=cur->size;
       freep(ptr);
+      dealloc(list, ptr);
     }
     else
       LOG_DOUBLE_FREE();
   }
-  dealloc(list, ptr);
 }
