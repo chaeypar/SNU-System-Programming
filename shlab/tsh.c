@@ -1,7 +1,8 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * <Put your student number and login ID here>
+ * 2019-16022 Chaeyeon Park
+ * 
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -184,7 +185,7 @@ void eval(char *cmdline)
             setpgid(0, 0);
             sigprocmask(SIG_SETMASK, &mask, NULL);
             if (execve(argv[0], argv, environ)<0){
-                printf("%s: Command not found.\n", argv[0]);
+                printf("%s: Command not found\n", argv[0]);
                 exit(0);
             }
         }
@@ -298,20 +299,30 @@ void do_bgfg(char **argv)
 
     if (argv[1][0]=='%'){
         jid = atoi(argv[1]+1);
-        job = getjobjid(jobs, jid);
-        
-        if (!job){
-            printf("%s: No such job\n", argv[1]);
+        if (!jid){
+            printf("%s: argument must be a PID or %%jobid\n", argv[0]);
             return;
+        }
+        else{
+            job = getjobjid(jobs, jid);
+            if (!job){
+                printf("%s: No such job\n", argv[1]);
+                return;
+            }
         }
     }
     else {
         pid = atoi(argv[1]);
-        job = getjobpid(jobs, pid);
-
-        if (!job){
-            printf("(%s): No such process\n", argv[1]);
-            return ;
+        if (!pid){
+            printf("%s: argument must be a PID or %%jobid\n", argv[0]);
+            return;
+        }
+        else{
+            job = getjobpid(jobs, pid);
+            if (!job){
+                printf("(%s): No such process\n", argv[1]);
+                return ;
+            }
         }
     }
 
@@ -336,9 +347,6 @@ void do_bgfg(char **argv)
         }
     }
 
-
-
-
     return;
 }
 
@@ -347,7 +355,7 @@ void do_bgfg(char **argv)
  */
 void waitfg(pid_t pid)
 {
-    if (pid == fgpid(jobs))
+    while (pid == fgpid(jobs))
         sleep(1);
     return;
 }
@@ -635,6 +643,3 @@ void sigquit_handler(int sig)
     printf("Terminating after receipt of SIGQUIT signal\n");
     exit(1);
 }
-
-
-
