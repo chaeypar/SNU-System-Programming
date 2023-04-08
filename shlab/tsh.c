@@ -86,6 +86,10 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
+int inside_handler_strlen(char *str);
+void inside_handler_itoa(int num, char *str);
+void inside_handler_printf(int jid, int pid, char *terminated_or_stopped, int status);
+
 /*
  * main - The shell's main routine 
  */
@@ -183,7 +187,7 @@ void eval(char *cmdline)
 
         if ((pid=fork())==0){
             setpgid(0, 0);
-            sigprocmask(SIG_SETMASK, &mask, NULL);
+            sigprocmask(SIG_UNBLOCK, &mask, NULL);
             if (execve(argv[0], argv, environ)<0){
                 printf("%s: Command not found\n", argv[0]);
                 exit(0);
@@ -372,6 +376,60 @@ void waitfg(pid_t pid)
  *     currently running children to terminate.  
  */
 
+int inside_handler_strlen(char *str){
+    int idx=0;
+
+    while(str[idx])
+        idx++;
+    return idx;
+}
+
+void inside_handler_itoa(int num, char *str){
+    int idx = 0, l, r;
+    
+    while(num!=0){
+        str[idx]=(num%10)+'0';
+        idx+=1;
+        num/=10;
+    }
+    str[idx]=0;
+    l=0;
+    r=idx-1;
+    while (l<r){
+        char c=str[l];
+        str[l]=str[r];
+        str[r]=c;
+        l+=1;
+        r-=1;
+    }
+    return ;
+}
+
+
+void inside_handler_printf(int jid, int pid, char *terminated_or_stopped, int status){
+    char *str1="Job [";
+    char *str2="] (";
+    char *str3=") ";
+    char *str4=" by signal ";
+    char *str5="\n";
+    char jstr[100], pstr[100], sstr[100];
+    inside_handler_itoa(jid, jstr);
+    inside_handler_itoa(pid, pstr);
+    inside_handler_itoa(status, sstr);
+
+    int n;
+    n = write(1, str1, inside_handler_strlen(str1));
+    n = write(1, jstr, inside_handler_strlen(jstr));
+    n = write(1, str2, inside_handler_strlen(str2));
+    n = write(1, pstr, inside_handler_strlen(pstr));
+    n = write(1, str3, inside_handler_strlen(str3));
+    n = write(1, terminated_or_stopped, inside_handler_strlen(terminated_or_stopped));
+    n = write(1, str4, inside_handler_strlen(str4));
+    n = write(1, sstr, inside_handler_strlen(sstr));
+    n = write(1, str5, 1);
+    n = n;
+}
+
 void sigchld_handler(int sig) 
 {
     int status;
@@ -379,14 +437,14 @@ void sigchld_handler(int sig)
 
     while ((pid=waitpid(-1, &status, WNOHANG | WUNTRACED))>0){
         
-        if (WIFSIGNALED(status)){
-            printf("Job [%d] (%d) terminated by signal %d\n",pid2jid(pid), pid, WTERMSIG(status));
+        if (WIFEXITED(status))
+            deletejob(jobs, pid);
+        else if (WIFSIGNALED(status)){
+            inside_handler_printf(pid2jid(pid), pid, "terminated", WTERMSIG(status));
             deletejob(jobs, pid);
         }
-        else if (WIFEXITED(status))
-            deletejob(jobs, pid);
         else if (WIFSTOPPED(status)){
-            printf("Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, WSTOPSIG(status));
+            inside_handler_printf(pid2jid(pid), pid, "stopped", WSTOPSIG(status));
             getjobpid(jobs, pid)->state=ST;
         }
     }
@@ -404,8 +462,7 @@ void sigint_handler(int sig)
 
     if (pid)
         kill(-pid, sig);
-
-    //printf("Job [%d] (%d) terminated by signal %d\n", pid2jid(pid), pid, sig);         
+    
     return;
 }
 
@@ -421,7 +478,6 @@ void sigtstp_handler(int sig)
     if (pid)
         kill(-pid, sig);
 
-    //fprintf(stdout, "Job [%d] (%d) stopped by signal %d\n", pid2jid(pid), pid, sig);
     return;
 }
 
