@@ -1,7 +1,7 @@
 /* 
  * tsh - A tiny shell program with job control
  * 
- * 2019-16022 Chaeyeon Park
+ * 2019-16022 stu9@sp05.snucse.org
  * 
  */
 #include <stdio.h>
@@ -86,6 +86,15 @@ void app_error(char *msg);
 typedef void handler_t(int);
 handler_t *Signal(int signum, handler_t *handler);
 
+/* Here are what I implemented for wrapping system calls and async-signal-safe IO */
+void Sleep(int num);
+void Write(int fd, char *str, int n);
+void Kill(pid_t pid, int sig);
+pid_t Fork(void);
+void Sigemptyset(sigset_t *sigvec);
+void Sigaddset(sigset_t *sigvec, int sig);
+void Sigprocmask(int sig, sigset_t *new_sigvec, sigset_t *old_sigvec);
+void Setpgid(pid_t pid, pid_t pgid);
 int inside_handler_strlen(char *str);
 void inside_handler_itoa(int num, char *str);
 void inside_handler_printf(int jid, int pid, char *terminated_or_stopped, int status);
@@ -168,26 +177,27 @@ int main(int argc, char **argv)
  * background children don't receive SIGINT (SIGTSTP) from the kernel
  * when we type ctrl-c (ctrl-z) at the keyboard.  
 */
+
 void eval(char *cmdline) 
 {
     char *argv[MAXARGS];
     int bg;
     pid_t pid;
-    sigset_t mask;
+    sigset_t sigvec;
 
-    sigemptyset(&mask);
+    Sigemptyset(&sigvec);
 
     bg = parseline(cmdline, argv);
     if (argv[0]==NULL)
         return;
     
     if (!builtin_cmd(argv)){
-        sigaddset(&mask, SIGCHLD);
-        sigprocmask(SIG_BLOCK, &mask, NULL);
+        Sigaddset(&sigvec, SIGCHLD);
+        Sigprocmask(SIG_BLOCK, &sigvec, NULL);
 
         if ((pid=fork())==0){
-            setpgid(0, 0);
-            sigprocmask(SIG_UNBLOCK, &mask, NULL);
+            Setpgid(0, 0);
+            Sigprocmask(SIG_UNBLOCK, &sigvec, NULL);
             if (execve(argv[0], argv, environ)<0){
                 printf("%s: Command not found\n", argv[0]);
                 exit(0);
@@ -196,12 +206,12 @@ void eval(char *cmdline)
         else{
             if (!bg){
                 addjob(jobs, pid, FG, cmdline);
-                sigprocmask(SIG_UNBLOCK, &mask, NULL);
+                Sigprocmask(SIG_UNBLOCK, &sigvec, NULL);
                 waitfg(pid);
             }
             else{
                 addjob(jobs, pid, BG, cmdline);
-                sigprocmask(SIG_UNBLOCK, &mask, NULL);
+                Sigprocmask(SIG_UNBLOCK, &sigvec, NULL);
                 printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
             }
         }
@@ -334,20 +344,20 @@ void do_bgfg(char **argv)
     if (job->state == BG){
         if (!bg){
             job->state = FG;
-            kill(-(job->pid), SIGCONT);
+            Kill(-(job->pid), SIGCONT);
             waitfg(job->pid);
         }
     }
     else if (job->state == ST){
         if (!bg){
             job->state = FG;
-            kill(-(job->pid), SIGCONT);
+            Kill(-(job->pid), SIGCONT);
             waitfg(job->pid);
         }
         else{
             job->state = BG;
             printf("[%d] (%d) %s", job->jid, job->pid, job->cmdline);
-            kill(-(job->pid), SIGCONT);
+            Kill(-(job->pid), SIGCONT);
         }
     }
 
@@ -357,10 +367,11 @@ void do_bgfg(char **argv)
 /* 
  * waitfg - Block until process pid is no longer the foreground process
  */
+
 void waitfg(pid_t pid)
 {
     while (pid == fgpid(jobs))
-        sleep(1);
+        Sleep(1);
     return;
 }
 
@@ -375,60 +386,6 @@ void waitfg(pid_t pid)
  *     available zombie children, but doesn't wait for any other
  *     currently running children to terminate.  
  */
-
-int inside_handler_strlen(char *str){
-    int idx=0;
-
-    while(str[idx])
-        idx++;
-    return idx;
-}
-
-void inside_handler_itoa(int num, char *str){
-    int idx = 0, l, r;
-    
-    while(num!=0){
-        str[idx]=(num%10)+'0';
-        idx+=1;
-        num/=10;
-    }
-    str[idx]=0;
-    l=0;
-    r=idx-1;
-    while (l<r){
-        char c=str[l];
-        str[l]=str[r];
-        str[r]=c;
-        l+=1;
-        r-=1;
-    }
-    return ;
-}
-
-
-void inside_handler_printf(int jid, int pid, char *terminated_or_stopped, int status){
-    char *str1="Job [";
-    char *str2="] (";
-    char *str3=") ";
-    char *str4=" by signal ";
-    char *str5="\n";
-    char jstr[100], pstr[100], sstr[100];
-    inside_handler_itoa(jid, jstr);
-    inside_handler_itoa(pid, pstr);
-    inside_handler_itoa(status, sstr);
-
-    int n;
-    n = write(1, str1, inside_handler_strlen(str1));
-    n = write(1, jstr, inside_handler_strlen(jstr));
-    n = write(1, str2, inside_handler_strlen(str2));
-    n = write(1, pstr, inside_handler_strlen(pstr));
-    n = write(1, str3, inside_handler_strlen(str3));
-    n = write(1, terminated_or_stopped, inside_handler_strlen(terminated_or_stopped));
-    n = write(1, str4, inside_handler_strlen(str4));
-    n = write(1, sstr, inside_handler_strlen(sstr));
-    n = write(1, str5, 1);
-    n = n;
-}
 
 void sigchld_handler(int sig) 
 {
@@ -448,6 +405,11 @@ void sigchld_handler(int sig)
             getjobpid(jobs, pid)->state=ST;
         }
     }
+
+    if (pid<0 && errno!=ECHILD){
+        unix_error("waitpid error occured");
+    }
+
     return;
 }
 
@@ -460,9 +422,9 @@ void sigint_handler(int sig)
 {
     pid_t pid = fgpid(jobs);
 
-    if (pid)
-        kill(-pid, sig);
-    
+    if (pid){
+        Kill(-pid, sig);
+    }
     return;
 }
 
@@ -475,9 +437,9 @@ void sigtstp_handler(int sig)
 {
     pid_t pid = fgpid(jobs);
 
-    if (pid)
-        kill(-pid, sig);
-
+    if (pid){
+        Kill(-pid, sig);
+    }
     return;
 }
 
@@ -644,7 +606,7 @@ void listjobs(struct job_t *jobs)
  * Other helper routines
  ***********************/
 
-/*
+/*fprintf
  * usage - print a help message
  */
 void usage(void) 
@@ -698,4 +660,109 @@ void sigquit_handler(int sig)
 {
     printf("Terminating after receipt of SIGQUIT signal\n");
     exit(1);
+}
+
+/*
+*   Wrapper function for 
+*
+*/
+
+void Sleep(int num){
+    int n;
+    if ((n=sleep(num))<0){
+        unix_error("sleep error occured");
+    }
+}
+
+void Write(int fd, char *str, int n){
+    int nwrite=0;
+    if ((nwrite=write(1, str, n)) < 0){
+        unix_error("write error occured");
+    }
+}
+
+void Kill(pid_t pid, int sig){
+    if (kill(pid, sig))
+        unix_error("kill error occured.\n");
+}
+
+pid_t Fork(void){
+    pid_t pid;
+    if ((pid=fork())<0)
+        unix_error("fork error occured.\n");
+    return pid;
+}
+
+void Sigemptyset(sigset_t *sigvec){
+    if (sigemptyset(sigvec))
+        unix_error("sigemptyset error occured");
+}
+
+void Sigaddset(sigset_t *sigvec, int sig){
+    if (sigaddset(sigvec, sig))
+        unix_error("sigaddset error occured");
+}
+
+void Sigprocmask(int sig, sigset_t *new_sigvec, sigset_t *old_sigvec){
+    if (sigprocmask(sig, new_sigvec, old_sigvec))
+        unix_error("sigprocmask error occured");
+}
+
+void Setpgid(pid_t pid, pid_t pgid){
+    if (setpgid(pid, pgid))
+        unix_error("setpgid error occured");
+}
+
+/*
+*/
+
+int inside_handler_strlen(char *str){
+    int idx=0;
+
+    while(str[idx])
+        idx++;
+    return idx;
+}
+
+void inside_handler_itoa(int num, char *str){
+    int idx = 0, l, r;
+    
+    while(num!=0){
+        str[idx]=(num%10)+'0';
+        idx+=1;
+        num/=10;
+    }
+    str[idx]=0;
+    l=0;
+    r=idx-1;
+    while (l<r){
+        char c=str[l];
+        str[l]=str[r];
+        str[r]=c;
+        l+=1;
+        r-=1;
+    }
+    return ;
+}
+
+void inside_handler_printf(int jid, int pid, char *terminated_or_stopped, int status){
+    char *str1="Job [";
+    char *str2="] (";
+    char *str3=") ";
+    char *str4=" by signal ";
+    char *str5="\n";
+    char jstr[100], pstr[100], sstr[100];
+    inside_handler_itoa(jid, jstr);
+    inside_handler_itoa(pid, pstr);
+    inside_handler_itoa(status, sstr);
+
+    Write(1, str1, inside_handler_strlen(str1));
+    Write(1, jstr, inside_handler_strlen(jstr));
+    Write(1, str2, inside_handler_strlen(str2));
+    Write(1, pstr, inside_handler_strlen(pstr));
+    Write(1, str3, inside_handler_strlen(str3));
+    Write(1, terminated_or_stopped, inside_handler_strlen(terminated_or_stopped));
+    Write(1, str4, inside_handler_strlen(str4));
+    Write(1, sstr, inside_handler_strlen(sstr));
+    Write(1, str5, 1);
 }
