@@ -201,8 +201,8 @@ void eval(char *cmdline)
         Sigprocmask(SIG_BLOCK, &sigvec, NULL);
 
         //Child process
-        if (pid=Fork()){
-            //Unblock the signal abd set new process group id.
+        if ((pid=Fork())){
+            //Unblock the signal and set new process group id.
             Sigprocmask(SIG_UNBLOCK, &sigvec, NULL);
             Setpgid(0, 0);
 
@@ -214,7 +214,7 @@ void eval(char *cmdline)
         }
         //Parent process
         else{
-            //If it is a foreground job, then add the job, unblock signal, and wait for the froeground job to terminate. 
+            //If it is a foreground job, then add the job, unblock the signal, and wait for the froeground job to terminate. 
             if (!bg){
                 addjob(jobs, pid, FG, cmdline);
                 Sigprocmask(SIG_UNBLOCK, &sigvec, NULL);
@@ -416,7 +416,7 @@ void sigchld_handler(int sig)
         //If the process terminated normally, then just delete the job with 'pid' from jobs
         if (WIFEXITED(status))
             deletejob(jobs, pid);
-        //If the process terminated normally, then just delete the job with 'pid' from jobs
+        ////If the process terminated abnormally, then print the state and delete the job with 'pid' from jobs.
         else if (WIFSIGNALED(status)){
             inside_handler_printf(pid2jid(pid), pid, "terminated", WTERMSIG(status));
             deletejob(jobs, pid);
@@ -695,17 +695,15 @@ void sigquit_handler(int sig)
 /* Sleep - check the return value of the sleep function and exit if an error occured */
 void Sleep(int num){
     int n;
-    if ((n=sleep(num))<0){
+    if ((n=sleep(num))<0)
         unix_error("sleep error occured");
-    }
 }
 
 /* Write - check the return value of the write function and exit if an error occured */
 void Write(int fd, char *str, int n){
     int nwrite=0;
-    if ((nwrite=write(1, str, n)) < 0){
+    if ((nwrite=write(1, str, n)) < 0)
         unix_error("write error occured");
-    }
 }
 
 /* Kill - check the return value of the kill function and exit if an error occured */
