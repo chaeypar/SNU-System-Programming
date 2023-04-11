@@ -201,7 +201,7 @@ void eval(char *cmdline)
         Sigprocmask(SIG_BLOCK, &sigvec, NULL);
 
         //Child process
-        if ((pid=Fork())){
+        if ((pid=Fork())==0){
             //Unblock the signal and set new process group id.
             Sigprocmask(SIG_UNBLOCK, &sigvec, NULL);
             Setpgid(0, 0);
