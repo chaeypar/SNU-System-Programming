@@ -82,7 +82,7 @@ static void delete_node(void *bp);
 int mm_init(void)
 {
     /* Create the initial empty heap */
-    if ((heap_listp == mem_sbrk(4*WSIZE)) == (void *)-1)
+    if ((heap_listp = mem_sbrk(4*WSIZE))==(void *)-1)
         return -1;
 
     PUT(heap_listp, 0); /* Alignment padding */
@@ -106,7 +106,7 @@ void *mm_malloc(size_t size)
 {
     size_t asize; /* Adjusted block size */
     size_t extendsize; /* Amount to extend heap if no fit */
-    void *bp;
+    void *bp = free_list;
 
     /* Ignore spurious requests */
     if (size == 0)
@@ -114,7 +114,6 @@ void *mm_malloc(size_t size)
     
     /* Adjust block size to include overhead and alignment reqs */
     asize = ALIGN(size + DSIZE);
-
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL){
         place(bp, asize);
@@ -123,10 +122,10 @@ void *mm_malloc(size_t size)
 
     /* No fit found. Get more memory and place the block */
     extendsize = MAX(asize, CHUNKSIZE);
-    if ((bp = extend_heap(CHUNKSIZE/WSIZE))==NULL)
+    if ((bp = extend_heap(extendsize/WSIZE))==NULL)
         return -1;
     place(bp, asize);
-    return 0;
+    return bp;
 }
 
 /*
@@ -234,11 +233,11 @@ static void *coalesce(void *bp){
 static void *find_fit(size_t size){
     /* First fit search */
     void *tp = free_list;
-    while (tp && size > GET_SIZE(tp))
+    while (tp && size > GET_SIZE(HDRP(tp)))
         tp = PRED(tp);
 
     /* No fit */
-    return NULL;
+    return tp;
 }
 
 static void place(void *bp, size_t asize){
@@ -270,27 +269,27 @@ static void insert_node(void *bp, size_t size){
 
     if (head != NULL){
         if (tail != NULL){
-            PUT(PREV_PTR(bp), head);
-            PUT(NEXT_PTR(head), bp);
-            PUT(NEXT_PTR(bp), tail);
-            PUT(PREV_PTR(tail), bp);
+            PUT(PREV_PTR(bp), (unsigned int)head);
+            PUT(NEXT_PTR(head), (unsigned int)bp);
+            PUT(NEXT_PTR(bp), (unsigned int)tail);
+            PUT(PREV_PTR(tail), (unsigned int)bp);
         }
         else {
-            PUT(PREV_PTR(bp), head);
-            PUT(NEXT_PTR(head), bp);
-            PUT(NEXT_PTR(bp), NULL);
+            PUT(PREV_PTR(bp), (unsigned int)head);
+            PUT(NEXT_PTR(head), (unsigned int)bp);
+            PUT(NEXT_PTR(bp), (unsigned int)NULL);
             free_list = bp;
         }
     }
     else{
         if (tail != NULL){
-            PUT(PREV_PTR(bp), NULL);
-            PUT(NEXT_PTR(bp), tail);
-            PUT(PREV_PTR(tail), bp);
+            PUT(PREV_PTR(bp), (unsigned int)NULL);
+            PUT(NEXT_PTR(bp), (unsigned int)tail);
+            PUT(PREV_PTR(tail), (unsigned int)bp);
         }
         else {
-            PUT(PREV_PTR(bp), NULL);
-            PUT(NEXT_PTR(bp), NULL);
+            PUT(PREV_PTR(bp), (unsigned int)NULL);
+            PUT(NEXT_PTR(bp), (unsigned int)NULL);
             free_list = bp;
         }
     }
@@ -301,17 +300,17 @@ static void insert_node(void *bp, size_t size){
 static void delete_node(void *bp){
     if (PRED(bp) != NULL){
         if (SUCC(bp) != NULL){
-            PUT(NEXT_PTR(PRED(bp)), SUCC(bp));
-            PUT(PREV_PTR(SUCC(bp)), PRED(bp));
+            PUT(NEXT_PTR(PRED(bp)), (unsigned int)SUCC(bp));
+            PUT(PREV_PTR(SUCC(bp)), (unsigned int)PRED(bp));
         }
         else{
-            PUT(NEXT_PTR(PRED(bp)), NULL);
+            PUT(NEXT_PTR(PRED(bp)), (unsigned int)NULL);
             free_list = PRED(bp);
         }
     }
     else{
         if (SUCC(bp) != NULL)
-            PUT(PREV_PTR(SUCC(bp)), NULL);
+            PUT(PREV_PTR(SUCC(bp)), (unsigned int)NULL);
         else
             free_list = NULL;
     }
