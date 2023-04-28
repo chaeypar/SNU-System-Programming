@@ -69,7 +69,7 @@ void *free_list;
 
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
-static void place(void *bp, size_t asize);
+static void *place(void *bp, size_t asize);
 static void insert_node(void *bp, size_t size);
 static void delete_node(void *bp);
 
@@ -116,14 +116,14 @@ void *mm_malloc(size_t size)
     while(bp&& GET_SIZE(HDRP(bp))<asize)
         bp = PRED(bp);
     if (bp != NULL){
-        place(bp, asize);
+        bp = place(bp, asize);
         return bp;
     }
     /* No fit found. Get more memory and place the block */
     extendsize = MAX(asize, CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE))==NULL)
         return NULL;
-    place(bp, asize);
+    bp = place(bp, asize);
     return bp;
 }
 
@@ -147,9 +147,9 @@ void mm_free(void *ptr)
 
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t oldsize;
+    void *nextptr, *prevptr, *newptr;
+    size_t nextsize, cursize, prevsize;
+    size_t asize;
     
     if (ptr == NULL)
         return mm_malloc(size);
@@ -158,11 +158,84 @@ void *mm_realloc(void *ptr, size_t size)
         return NULL;
     }
     else {
-        oldsize = GET_SIZE(HDRP(ptr));
+        asize = ALIGN(size + DSIZE);
+        cursize = GET_SIZE(HDRP(ptr));
+        if (asize <= cursize){
+            PUT(HDRP(ptr), PACK(asize,1));
+            PUT(FTRP(ptr), PACK(asize,1));
+            if (asize != cursize){
+                PUT(HDRP(NEXT_BLKP(ptr)), PACK(cursize-asize,0));
+                PUT(FTRP(NEXT_BLKP(ptr)), PACK(cursize-asize,0));
+                insert_node(NEXT_BLKP(ptr), cursize-asize);
+            }
+            return ptr;
+        }
+        nextptr = NEXT_BLKP(ptr);
+        prevptr = PREV_BLKP(ptr);
+        nextsize = GET_SIZE(HDRP(nextptr));
+        prevsize = GET_SIZE(HDRP(prevptr));
+        int tot;
+        if (GET_ALLOC(HDRP(prevptr))&&!GET_ALLOC(HDRP(nextptr))){
+            tot = nextsize + cursize;
+            if (tot >= asize){
+                delete_node(nextptr);
+                if (tot - asize < 2*DSIZE){
+                    PUT(HDRP(ptr), PACK(tot, 1));
+                    PUT(FTRP(ptr), PACK(tot, 1));
+                }
+                else{
+                    PUT(HDRP(ptr), PACK(asize, 1));
+                    PUT(FTRP(ptr), PACK(asize, 1));
+                    PUT(HDRP(NEXT_BLKP(ptr)), PACK(tot-asize,0));
+                    PUT(FTRP(NEXT_BLKP(ptr)), PACK(tot-asize,0));
+                    insert_node(NEXT_BLKP(ptr), tot-asize);
+                }
+                return ptr;
+            }
+       }
+        else if (!GET_ALLOC(HDRP(prevptr))&&GET_ALLOC(HDRP(nextptr))){
+            tot = prevsize + cursize;
+            if (tot >= asize){
+                delete_node(prevptr);
+                memmove(prevptr, ptr, size);
+                if (tot - asize < 2*DSIZE){
+                    PUT(HDRP(prevptr), PACK(tot, 1));
+                    PUT(FTRP(prevptr), PACK(tot, 1));
+                }
+                else{
+                    PUT(HDRP(prevptr), PACK(asize, 1));
+                    PUT(FTRP(prevptr), PACK(asize, 1));
+                    PUT(HDRP(NEXT_BLKP(prevptr)), PACK(tot-asize,0));
+                    PUT(FTRP(NEXT_BLKP(prevptr)), PACK(tot-asize,0));
+                    insert_node(NEXT_BLKP(prevptr), tot-asize);
+                }
+                return prevptr;
+            }
+        }
+        else if (!GET_ALLOC(HDRP(prevptr))&&!GET_ALLOC(HDRP(nextptr))){
+            tot = prevsize + cursize + nextsize;
+            if (tot >= asize){
+                delete_node(nextptr);
+                delete_node(prevptr);
+                memmove(prevptr, ptr, size);
+                if (tot - asize < 2*DSIZE){
+                    PUT(HDRP(prevptr), PACK(tot, 1));
+                    PUT(FTRP(prevptr), PACK(tot, 1));
+                }
+                else{
+                    PUT(HDRP(prevptr), PACK(asize, 1));
+                    PUT(FTRP(prevptr), PACK(asize, 1));
+                    PUT(HDRP(NEXT_BLKP(prevptr)), PACK(tot-asize,0));
+                    PUT(FTRP(NEXT_BLKP(prevptr)), PACK(tot-asize,0));
+                    insert_node(NEXT_BLKP(prevptr), tot-asize);
+                }
+                return prevptr;
+            }
+        }
         newptr = mm_malloc(size);
-        memcpy(newptr, ptr, MIN(size, oldsize));
+        memcpy(newptr, ptr, MIN(size, cursize));
         mm_free(ptr);
-        return newptr;
+        return newptr;        
     }
 }
 
@@ -228,32 +301,23 @@ static void *coalesce(void *bp){
     return bp;
 }
 
-static void *find_fit(size_t size){
-    /* First fit search */
-    void *tp = free_list;
-    while (tp && size > GET_SIZE(HDRP(tp)))
-        tp = PRED(tp);
-
-    /* No fit */
-    return tp;
-}
-
-static void place(void *bp, size_t asize){
+static void *place(void *bp, size_t asize){
     size_t csize = GET_SIZE(HDRP(bp));
     delete_node(bp);
 
     if ((csize-asize) >= (2*DSIZE)){
-        PUT(HDRP(bp), PACK(asize, 1));
-        PUT(FTRP(bp), PACK(asize, 1));
-        PUT(HDRP(NEXT_BLKP(bp)), PACK(csize-asize, 0));
-        PUT(FTRP(NEXT_BLKP(bp)), PACK(csize-asize, 0));
-        insert_node(NEXT_BLKP(bp), csize-asize);
-
+       PUT(HDRP(bp), PACK(csize-asize, 0));
+		PUT(FTRP(bp), PACK(csize-asize, 0));
+		PUT(HDRP(NEXT_BLKP(bp)), PACK(asize, 1));
+		PUT(FTRP(NEXT_BLKP(bp)), PACK(asize, 1));
+		insert_node(bp, csize-asize);
+        return NEXT_BLKP(bp);
     }
     else{
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
     }
+    return bp;
 }
 
 static void insert_node(void *bp, size_t size){
@@ -310,4 +374,10 @@ static void delete_node(void *bp){
         else
             free_list = NULL;
     }
+}
+
+int mm_check(void){
+
+    void *bp;
+
 }
