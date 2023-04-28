@@ -29,7 +29,6 @@
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT-1)) & ~0x7)
 
-
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 /* Basic constants and macros */
@@ -70,17 +69,16 @@ void *free_list;
 
 static void *extend_heap(size_t words);
 static void *coalesce(void *bp);
-static void *find_fit(size_t size);
 static void place(void *bp, size_t asize);
 static void insert_node(void *bp, size_t size);
 static void delete_node(void *bp);
-
 
 /* 
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
+    free_list = NULL;
     /* Create the initial empty heap */
     if ((heap_listp = mem_sbrk(4*WSIZE))==(void *)-1)
         return -1;
@@ -115,15 +113,16 @@ void *mm_malloc(size_t size)
     /* Adjust block size to include overhead and alignment reqs */
     asize = ALIGN(size + DSIZE);
     /* Search the free list for a fit */
-    if ((bp = find_fit(asize)) != NULL){
+    while(bp&& GET_SIZE(HDRP(bp))<asize)
+        bp = PRED(bp);
+    if (bp != NULL){
         place(bp, asize);
         return bp;
     }
-
     /* No fit found. Get more memory and place the block */
     extendsize = MAX(asize, CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE))==NULL)
-        return -1;
+        return NULL;
     place(bp, asize);
     return bp;
 }
@@ -166,7 +165,6 @@ void *mm_realloc(void *ptr, size_t size)
         return newptr;
     }
 }
-
 
 static void *extend_heap(size_t words){
     void *bp;
@@ -247,10 +245,10 @@ static void place(void *bp, size_t asize){
     if ((csize-asize) >= (2*DSIZE)){
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
-        bp = NEXT_BLKP(bp);
-        PUT(HDRP(bp), PACK(csize-asize, 0));
-        PUT(FTRP(bp), PACK(csize-asize, 0));
+        PUT(HDRP(NEXT_BLKP(bp)), PACK(csize-asize, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(csize-asize, 0));
         insert_node(NEXT_BLKP(bp), csize-asize);
+
     }
     else{
         PUT(HDRP(bp), PACK(csize, 1));
@@ -293,8 +291,6 @@ static void insert_node(void *bp, size_t size){
             free_list = bp;
         }
     }
-
-
 }
 
 static void delete_node(void *bp){
