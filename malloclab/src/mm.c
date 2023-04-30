@@ -5,7 +5,8 @@
  * When it needs to search the available free block with appropriate size, it only searches through the freed blocks. 
  * For each memory block, there is a header and a footer that contains the information about the size and whether it is allocated.
  * In freed memory blocks, they also store the pointer of the previous and the next freed memory block of it.
- *  
+ * In allocated memory blocks, they store the payload.
+ * 
  * Especially for the mm_realloc function, there is an improvement for its memory utilization.
  * Instead of just directly using mm_malloc and mm_free, it observes whether it can reuse the original block, its previous block and its next block.
  * 
@@ -261,12 +262,12 @@ void *mm_realloc(void *ptr, size_t size)
                 delete_free(prevptr);
                 //Copy the payload of the block
                 memmove(prevptr, ptr, cursize-DSIZE);
-                //
+                // If the remaining size of the memory block is too small 
                 if (tot - asize < 2*DSIZE){
                     PUT(HDRP(prevptr), PACK(tot, 1));
                     PUT(FTRP(prevptr), PACK(tot, 1));
                 }
-                //
+                // Otherwise, split the block for the efficiency of the memory use
                 else{
                     PUT(HDRP(prevptr), PACK(asize, 1));
                     PUT(FTRP(prevptr), PACK(asize, 1));
@@ -306,7 +307,7 @@ static void *extend_heap(size_t words){
 }
 
 /*
-* coalesce - Merging the freed blocks
+* coalesce - Merge the freed blocks
 */
 static void *coalesce(void *bp){
     size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
