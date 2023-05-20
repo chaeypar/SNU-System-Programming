@@ -1,0 +1,35 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+DBFS_FILE_PATH	paddr/app.c	9;"	d	file:
+KDIR	paddr/Makefile	/^KDIR = \/lib\/modules\/$(shell uname -r)\/build$/;"	m
+PADDR	paddr/app.c	10;"	d	file:
+curr	ptree/dbfs_ptree.c	/^static struct task_struct *curr;$/;"	v	typeref:struct:task_struct	file:
+dbfs_fops	paddr/dbfs_paddr.c	/^static const struct file_operations dbfs_fops = {$/;"	v	typeref:struct:file_operations	file:
+dbfs_fops	ptree/dbfs_ptree.c	/^static const struct file_operations dbfs_fops = {$/;"	v	typeref:struct:file_operations	file:
+dbfs_module_exit	paddr/dbfs_paddr.c	/^module_exit(dbfs_module_exit);$/;"	v
+dbfs_module_exit	paddr/dbfs_paddr.c	/^static void __exit dbfs_module_exit(void)$/;"	f	file:
+dbfs_module_exit	ptree/dbfs_ptree.c	/^module_exit(dbfs_module_exit);$/;"	v
+dbfs_module_exit	ptree/dbfs_ptree.c	/^static void __exit dbfs_module_exit(void)$/;"	f	file:
+dbfs_module_init	paddr/dbfs_paddr.c	/^module_init(dbfs_module_init);$/;"	v
+dbfs_module_init	paddr/dbfs_paddr.c	/^static int __init dbfs_module_init(void)$/;"	f	file:
+dbfs_module_init	ptree/dbfs_ptree.c	/^module_init(dbfs_module_init);$/;"	v
+dbfs_module_init	ptree/dbfs_ptree.c	/^static int __init dbfs_module_init(void)$/;"	f	file:
+dir	paddr/dbfs_paddr.c	/^static struct dentry *dir, *output;$/;"	v	typeref:struct:dentry	file:
+dir	ptree/dbfs_ptree.c	/^static struct dentry *dir, *inputdir, *ptreedir;$/;"	v	typeref:struct:dentry	file:
+inputdir	ptree/dbfs_ptree.c	/^static struct dentry *dir, *inputdir, *ptreedir;$/;"	v	typeref:struct:	file:
+main	paddr/app.c	/^int main(void)$/;"	f
+obj-m	paddr/Makefile	/^obj-m := dbfs_paddr.o$/;"	m
+obj-m	ptree/Makefile	/^obj-m := dbfs_ptree.o$/;"	m
+output	paddr/dbfs_paddr.c	/^static struct dentry *dir, *output;$/;"	v	typeref:struct:	file:
+packet	paddr/app.c	/^struct packet {$/;"	s	file:
+paddr	paddr/app.c	/^        unsigned long paddr;$/;"	m	struct:packet	file:
+pid	paddr/app.c	/^        pid_t pid;$/;"	m	struct:packet	file:
+ptreedir	ptree/dbfs_ptree.c	/^static struct dentry *dir, *inputdir, *ptreedir;$/;"	v	typeref:struct:	file:
+read_output	paddr/dbfs_paddr.c	/^static ssize_t read_output(struct file *fp,$/;"	f	file:
+task	paddr/dbfs_paddr.c	/^static struct task_struct *task;$/;"	v	typeref:struct:task_struct	file:
+vaddr	paddr/app.c	/^        unsigned long vaddr;$/;"	m	struct:packet	file:
+write_pid_to_input	ptree/dbfs_ptree.c	/^static ssize_t write_pid_to_input(struct file *fp, $/;"	f	file:
