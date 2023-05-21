@@ -3,6 +3,7 @@
 #include <linux/module.h>
 #include <linux/uaccess.h>
 #include <asm/pgtable.h>
+#include <linux/pgtable.h>
 
 MODULE_LICENSE("GPL");
 
@@ -25,21 +26,48 @@ static ssize_t read_output(struct file *fp,
         struct packet pack;
         unsigned long ppn, ppo;
 
-        copy_from_user((void *)&pack, user_buffer, length);
-        task = pid_task(find_vpid(pid), PIDTYPE_PID);
+        copy_from_user(&pack, user_buffer, length);
+        task = pid_task(find_vpid(pack.pid), PIDTYPE_PID);
         if (!task){
-                printk("Process with the typed pid does not exist.\n");
-                return 0;
+                printk("Process with the typed pid does not exist\n");
+                return -1;
         }
 
         pgd_t *pgd = pgd_offset(task->mm, pack.vaddr);
-        p4d_t *p4d = p4d_offset(pgd, pack.vaddr); 
+        if (pgd_none(*pgd) || pgd_bad(*pgd)){
+                printk("Error related to pgd\n");
+                return -1;
+        }
+
+        p4d_t *p4d = p4d_offset(pgd, pack.vaddr);
+        if (p4d_none(*p4d) || p4d_bad(*p4d)){
+                printk("Error related to p4d\n");
+                return -1;
+        }
+
         pud_t *pud = pud_offset(p4d, pack.vaddr);
-  =     pmd_t *pmd = pmd_offset(pud, pack.vaddr);
-        pte_t *pte = pte_offset_kernel(pmd, pack.vaddr);
+        if (pud_none(*pud) || pud_bad(*pud)){
+                printk("Error related to pud\n");
+                return -1;
+        }
+
+        pmd_t *pmd = pmd_offset(pud, pack.vaddr);
+        if (pmd_none(*pmd) || pmd_bad(*pmd)){
+                printk("Error related to pmd\n");
+                return -1;
+        }
+        
+        pte_t *pte = pte_offset_map(pmd, pack.vaddr);
+        if (pte_none(*pte)){
+                printk("Error related to pte\n");
+                return -1;
+        }
+        
         ppn = pte_pfn(*pte) << PAGE_SHIFT;
         ppo = pack.vaddr & (~PAGE_MASK);
-        pack.paddr = ppn|ppo;
+        pack.paddr = ppn | ppo;
+
+        copy_to_user(user_buffer, &pack, length);
         return 0;
 }
 
