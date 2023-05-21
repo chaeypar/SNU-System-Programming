@@ -8,22 +8,6 @@ MODULE_LICENSE("GPL");
 static struct dentry *dir, *inputdir, *ptreedir;
 static struct task_struct *curr;
 static struct debugfs_blob_wrapper *blob;
-static int tot_len = 0;
-
-static void trace_process(struct task_struct *tk){
-        char temp[1000];
-        if (!tk)
-                return;
-        if (tk->pid != 1){
-                trace_process(tk->parent);
-        }
-        sprintf(temp, "%s (%d)\n", tk->comm, tk->pid);
-        int temp_len = strlen(temp);
-        strcpy(blob->data + tot_len, temp);        
-        (blob->data)[tot_len + temp_len] = 0;
-        tot_len += temp_len;
-        
-}
 
 static ssize_t write_pid_to_input(struct file *fp, 
                                 const char __user *user_buffer, 
@@ -31,6 +15,7 @@ static ssize_t write_pid_to_input(struct file *fp,
                                 loff_t *position)
 {
         pid_t input_pid;
+        char tp[5000];
 
         sscanf(user_buffer, "%u", &input_pid);
 
@@ -42,9 +27,15 @@ static ssize_t write_pid_to_input(struct file *fp,
         }
         // Tracing process tree from input_pid to init(1) process
         // Make Output Format string: process_command (process_id)
-        trace_process(curr);
+        ((char *)(blob->data))[0] = NULL;
 
-
+        while (curr){
+                sprintf(tp, "%s (%d)\n%s", curr->comm, curr->pid, (char *)(blob->data));
+                sprintf(blob->data, "%s", tp);
+                if (curr->pid == 1)
+                        break;
+                curr = curr -> parent;
+        }
         return length;
 }
 
@@ -61,11 +52,11 @@ static int __init dbfs_module_init(void)
                 printk("Cannot create ptree dir\n");
                 return -1;
         }
-        char *stats = (char *)kmalloc(, GFP_KERNEL);
 
         blob = (struct debugfs_blob_wrapper *)kmalloc(sizeof(struct debugfs_blob_wrapper), GFP_KERNEL);
-        blob -> data = (void *)stats;
-        blob -> size = (unsigned long)sizeof(struct debugfs_blob_wrapper);
+        blob -> data = (void *)kmalloc(5000, GFP_KERNEL);
+        blob -> size = 5000;
+        tot_len = 0;
  
         inputdir = debugfs_create_file("input", 0777, dir, NULL, &dbfs_fops);
         ptreedir = debugfs_create_blob("ptree", 0777, dir, blob); // Find suitable debugfs API	
@@ -78,7 +69,18 @@ static void __exit dbfs_module_exit(void)
 {
         // Implement exit module code
         debugfs_remove_recursive(dir);
-	printk("dbfs_ptree module exit\n");
+        
+        if (blob && blob->data){
+                kfree(blob->data);
+                blob->data = NULL;
+        }
+
+        if (blob){
+                kfree(blob);
+                blob = NULL;
+        }
+	
+        printk("dbfs_ptree module exit\n");
 }
 
 module_init(dbfs_module_init);
