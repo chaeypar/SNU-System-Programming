@@ -25,6 +25,12 @@ static ssize_t read_output(struct file *fp,
 {
         struct packet pack;
         unsigned long ppn, ppo;
+        
+        pgd_t *pgd;
+        p4d_t *p4d;
+        pud_t *pud;
+        pmd_t *pmd;
+        pte_t *pte;
 
         // to copy the data from user_buffer to 'pack'
         copy_from_user(&pack, user_buffer, length);
@@ -37,35 +43,35 @@ static ssize_t read_output(struct file *fp,
         }
 
         // to get pgd from mm_struct and the virtual address - page walk step 1
-        pgd_t *pgd = pgd_offset(task->mm, pack.vaddr);
+        pgd = pgd_offset(task->mm, pack.vaddr);
         if (pgd_none(*pgd) || pgd_bad(*pgd)){
                 printk("Error related to pgd\n");
                 return -1;
         }
 
         // to get p4d from pgd and the virtual address - page walk step 2
-        p4d_t *p4d = p4d_offset(pgd, pack.vaddr);
+        p4d = p4d_offset(pgd, pack.vaddr);
         if (p4d_none(*p4d) || p4d_bad(*p4d)){
                 printk("Error related to p4d\n");
                 return -1;
         }
 
         // to get pud from p4d and the virtual address - page walk step 3
-        pud_t *pud = pud_offset(p4d, pack.vaddr);
+        pud = pud_offset(p4d, pack.vaddr);
         if (pud_none(*pud) || pud_bad(*pud)){
                 printk("Error related to pud\n");
                 return -1;
         }
 
         // to get pmd from pud and the virtual address - page walk step 4
-        pmd_t *pmd = pmd_offset(pud, pack.vaddr);
+        pmd = pmd_offset(pud, pack.vaddr);
         if (pmd_none(*pmd) || pmd_bad(*pmd)){
                 printk("Error related to pmd\n");
                 return -1;
         }
         
         // to get pte from pmd and the virtual address - page walk step 5
-        pte_t *pte = pte_offset_map(pmd, pack.vaddr);
+        pte = pte_offset_map(pmd, pack.vaddr);
         if (pte_none(*pte)){
                 printk("Error related to pte\n");
                 return -1;
