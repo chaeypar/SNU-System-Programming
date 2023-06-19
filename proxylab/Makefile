@@ -7,7 +7,7 @@
 CC = gcc
 CFLAGS = -g -Wall
 LDFLAGS = -lpthread
-STUNO = 2021-12345
+STUNO = 2019-16022
 
 all: proxy
 
