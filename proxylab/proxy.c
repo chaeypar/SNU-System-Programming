@@ -14,7 +14,6 @@ static const char *end_msg = "\r\n";
 static const char *connection_msg = "Connection: close\r\n";
 static const char *proxyconnection_msg = "Proxy-Connection: close\r\n";
 
-
 void thread_assist(int connfd);
 void *thread_func(void *vargp);
 
@@ -60,34 +59,62 @@ void thread_assist(int connfd){
         return;
 
     sscanf(buf, "%s %s %s", method, uri, version);
- 
     if (strcasecmp(method, "GET")){
-        printf("Only Get request is implemented\n");
+        printf("%s is not implemented\n", method);
         return;
     }
 
     parse_uri(uri, host, portn, detailed);
+    
     clientfd = Open_clientfd(host, portn);
     Rio_readinitb(&rio2, clientfd);
 
-    debug();
-    sprintf(buf2, "%s%s%s", get_msg, detailed, http_msg);
-    
-    while((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0){
-        if (!strcmp(buf, end_msg))
-            break;
-        sprintf(buf2, "%s%s", buf2, buf);
-    }
-    debug();
+    sprintf(buf2, "%s %s %s", "GET", detailed, http_msg);
+    printf("%s %s", detailed, http_msg);
     Rio_writen(clientfd, buf2, strlen(buf2));
-
-    while ((n = Rio_readlineb(&rio2, buf,MAXLINE))!= 0){
-        Rio_writen(connfd, buf, strlen(buf));
+    
+    int flagu = 0, flagc=0, flagpc = 0;
+    while((n = Rio_readlineb(&rio, buf, MAXLINE)) != 0){
+        if (!strncmp(buf, end_msg, 2)){
+            Rio_writen(clientfd, buf, strlen(buf));
+            break;
+        }
+        else if (!strncasecmp(buf, "Host", 4)){
+            flagu = 1;
+            Rio_writen(clientfd, buf, strlen(buf));  
+        }
+        else if (!strncasecmp(buf, "User-Agent", 10)){
+            Rio_writen(clientfd, user_agent_hdr, strlen(user_agent_hdr));
+        }
+        else if (!strncasecmp(buf, "Connection", 10)){
+            flagc = 1;
+            Rio_writen(clientfd, connection_msg, strlen(connection_msg));
+        }
+        else if (!strncasecmp(buf, "Proxy-connection", 15)){
+            flagpc = 1;
+            Rio_writen(clientfd, proxyconnection_msg, strlen(proxyconnection_msg));
+        }
+        else{
+            Rio_writen(clientfd, buf, strlen(buf));
+        }
+    }
+    if (!flagu){
+        char temp[20];
+        sprintf(temp, "%s%s\r\n", host_msg, host);
+        Rio_writen(clientfd, temp, strlen(temp));
+    }
+    if (!flagc){
+        Rio_writen(clientfd, connection_msg, strlen(connection_msg));
+    }
+    if (!flagpc){
+        Rio_writen(clientfd, proxyconnection_msg, strlen(proxyconnection_msg));
     }
 
+    while((n = Rio_readlineb(&rio2, buf, MAXLINE)) != 0){
+        Rio_writen(connfd, buf, n);
+    }
+    Close(clientfd);
 }
-
-
 
 void parse_uri(char *uri, char *host, char *portn, char *detailed){
     
@@ -96,17 +123,16 @@ void parse_uri(char *uri, char *host, char *portn, char *detailed){
     if (!(ptr = strstr(uri, "http://")))
         ptr = uri;
     else
-        ptr += strlen("http://");
-    
+        ptr += 7;
 
     int i = 0;
-    while(ptr != ':' && ptr != '/'){
+    while(*ptr != ':' && *ptr != '/'){
         host[i] = *ptr;
         ptr++;
         i++;
     }
     host[i] = 0;
-    
+
     if (*ptr != ':'){
         portn[0] = '8';
         portn[1] = '0';
