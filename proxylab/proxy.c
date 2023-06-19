@@ -70,14 +70,6 @@ void thread_assist(int connfd){
     clientfd = Open_clientfd(host, portn);
     Rio_readinitb(&rio2, clientfd);
 
-static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
-static const char *get_msg = "Get ";
-static const char *http_msg = "HTTP/1.0\r\n";
-static const char *host_msg = "Host: ";
-static const char *end_msg = "\r\n";
-static const char *connection_msg = "Connection: close\r\n";
-static const char *proxyconnection_msg = "Proxy-Connection: close\r\n";
-
     debug();
     sprintf(buf2, "%s%s%s", get_msg, detailed, http_msg);
     
